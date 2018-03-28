@@ -35,20 +35,26 @@ Vagrant.configure('2') do |config|
     vb.cpus = 4
   end
   config.vm.define 'gateway' do |config|
-    config.vm.box = 'ubuntu-16.04-amd64'
+    config.vm.box = 'ubuntu/xenial64'
     config.vm.provider :libvirt do |lv|
       lv.memory = 512
     end
     config.vm.provider :virtualbox do |vb|
       vb.memory = 512
+      vb.customize ["modifyvm", :id, "--nicpromisc2", "allow-all"]
     end
     config.vm.hostname = 'gateway.example.com'
     config.vm.network :private_network, ip: gateway_ip, libvirt__forward_mode: 'none', libvirt__dhcp_enabled: false
+
+    config.vm.provision :shell, path: 'provision-fixpredifinedInt.sh'
+    config.vm.provision :reload
+
     certificate_ip_addr = service_ip_addr.clone
     (1..number_of_nodes).each do |n|
       certificate_ip = certificate_ip_addr.to_s; certificate_ip_addr = certificate_ip_addr.succ
       config.vm.provision :shell, path: 'provision-certificate.sh', args: ["pve#{n}.example.com", certificate_ip]
     end
+
     config.vm.provision :shell, path: 'provision-certificate.sh', args: ['example.com', gateway_ip]
     config.vm.provision :shell, path: 'provision-gateway.sh', args: gateway_ip
     config.vm.provision :shell, path: 'provision-postfix.sh'
@@ -77,7 +83,9 @@ Vagrant.configure('2') do |config|
           end
         end
         vb.customize ['storageattach', :id, '--storagectl', 'SATA Controller', '--port', 1, '--device', 0, '--type', 'hdd', '--medium', storage_disk_filename]
+	vb.customize ["modifyvm", :id, "--nicpromisc2", "allow-all"]
       end
+      config.vm.provision :reload
       config.vm.provision :shell,
         path: 'provision.sh',
         args: [
